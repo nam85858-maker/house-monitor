@@ -1,23 +1,33 @@
-name: Weekly Image Check
+name: Weekly Photo Alert
 on:
   schedule:
-    - cron: '0 0 * * 1' # 매주 월요일 오전 9시 (UTC 기준 00:00) 실행
-  workflow_dispatch: # 수동으로도 실행 가능하게 설정
+    - cron: '0 0 * * 1' # 월요일 오전 9시 (한국 시간 기준)
+    - cron: '0 11 * * 5' # 금요일 오후 8시 (한국 시간 기준)
+  workflow_dispatch:
 
 jobs:
-  build:
+  run-bot:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Install dependencies
         run: |
-          pip install selenium webdriver-manager python-telegram-bot
+          pip install selenium webdriver-manager python-telegram-bot Pillow requests
       - name: Run Script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: python 234.py
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add last_image.txt || exit 0
+          git commit -m "Update last image URL" || exit 0
+          git push
