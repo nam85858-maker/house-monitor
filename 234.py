@@ -24,7 +24,7 @@ async def send_telegram(photo_url):
     img = Image.open(BytesIO(response.content))
     
     # 2. 이미지 270도 회전 (시계 방향 기준 270도, 혹은 반시계 90도와 같음)
-    rotated_img = img.rotate(270, expand=True)
+    rotated_img = img.rotate(90, expand=True)
     
     # 3. 회전된 이미지를 임시 파일로 저장
     temp_photo = "rotated_house.jpg"
@@ -77,4 +77,5 @@ def run_check():
 
 if __name__ == "__main__":
     run_check()
+
 
