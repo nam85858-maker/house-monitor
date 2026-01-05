@@ -4,57 +4,45 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
-import time
+from selenium.webdriver.chrome.options import Options
 import os
+import time
 
-# --- 설정 구간 ---
-TELEGRAM_TOKEN = '8561709574:AAG4WWfgEEaswCbNDWLGwrM7YXb_1lxmZMs'
-CHAT_ID = '862872708'
-HISTORY_FILE = 'last_image.txt' # 마지막 사진 주소를 저장할 파일
-# ----------------
+# GitHub Secrets에서 정보를 가져옵니다
+TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
+CHAT_ID = os.environ.get('CHAT_ID')
 
-async def send_telegram_msg(photo_url):
+async def send_telegram(photo_url):
     bot = Bot(token=TELEGRAM_TOKEN)
-    message = "🏠 확인 중인 웹사이트의 사진이 변경되었습니다!"
-    await bot.send_message(chat_id=CHAT_ID, text=message)
+    await bot.send_message(chat_id=CHAT_ID, text="🏠 사진 변경 감지! 확인해 보세요.")
     await bot.send_photo(chat_id=CHAT_ID, photo=photo_url)
 
-def check_and_notify():
+def run_check():
+    chrome_options = Options()
+    chrome_options.add_argument('--headless') # 서버에선 창을 띄울 수 없으므로 필수
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    
     service = Service(ChromeDriverManager().install())
-    options = webdriver.ChromeOptions()
-    options.add_argument('--headless') # 알림용이므로 창 없이 실행
-    driver = webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
-        target_url = "https://pf.kakao.com/_sixfwG/112042925"
-        driver.get(target_url)
+        # 확인하고 싶은 웹사이트 주소를 여기에 넣으세요
+        driver.get("https://pf.kakao.com/_sixfwG/112042925") 
         time.sleep(5)
 
         xpath = '//*[@id="mArticle"]/div[2]/div[1]/div[2]/div/img'
         img_element = driver.find_element(By.XPATH, xpath)
-        current_img_url = img_element.get_attribute('src')
-
-        # 이전에 저장된 이미지 주소 읽기
-        last_img_url = ""
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, 'r') as f:
-                last_img_url = f.read().strip()
-
-        # 사진이 바뀌었는지 비교
-        if current_img_url != last_img_url:
-            print("새로운 사진 감지! 텔레그램 전송 중...")
-            asyncio.run(send_telegram_msg(current_img_url))
-            
-            # 새로운 주소로 업데이트
-            with open(HISTORY_FILE, 'w') as f:
-                f.write(current_img_url)
-        else:
-            print("사진이 변경되지 않았습니다.")
+        img_url = img_element.get_attribute('src')
+        
+        # 서버 실행이므로 매번 사진을 보내도록 설정 (또는 변경 감지 로직 추가 가능)
+        asyncio.run(send_telegram(img_url))
+        print("전송 성공")
 
     except Exception as e:
-        print(f"오류 발생: {e}")
+        print(f"오류: {e}")
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    check_and_notify()
+    run_check()
