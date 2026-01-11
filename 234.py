@@ -49,7 +49,7 @@ def run_check():
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
-        driver.get("https://pf.kakao.com/_sixfwG/112042925") 
+        driver.get("https://pf.kakao.com/_sixfwG/posts") 
         time.sleep(5)
 
         xpath = '//*[@id="mArticle"]/div[2]/div[1]/div[2]/div/img'
@@ -77,5 +77,6 @@ def run_check():
 
 if __name__ == "__main__":
     run_check()
+
 
 
