@@ -8,34 +8,26 @@ from selenium.webdriver.chrome.options import Options
 import os
 import time
 import requests
-from PIL import Image # 이미지 회전을 위한 라이브러리
+import hashlib # 사진의 지문을 만들기 위한 도구
+from PIL import Image
 from io import BytesIO
 
-# 설정 정보
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
-HISTORY_FILE = 'last_image.txt'
+HISTORY_FILE = 'last_image_hash.txt' # 주소 대신 해시값(지문) 저장
 
-async def send_telegram(photo_url):
+async def send_telegram(photo_bytes):
     bot = Bot(token=TELEGRAM_TOKEN)
+    img = Image.open(BytesIO(photo_bytes))
+    rotated_img = img.rotate(90, expand=True) # 90도 또는 270도로 조절
     
-    # 1. 이미지 다운로드
-    response = requests.get(photo_url)
-    img = Image.open(BytesIO(response.content))
-    
-    # 2. 이미지 270도 회전 (시계 방향 기준 270도, 혹은 반시계 90도와 같음)
-    rotated_img = img.rotate(90, expand=True)
-    
-    # 3. 회전된 이미지를 임시 파일로 저장
     temp_photo = "rotated_house.jpg"
     rotated_img.save(temp_photo)
     
-    # 4. 메시지와 함께 회전된 사진 전송
-    await bot.send_message(chat_id=CHAT_ID, text="🏠 사진 변경 감지! (270도 회전됨)")
+    await bot.send_message(chat_id=CHAT_ID, text="🏠 집 상태 사진이 업데이트되었습니다!")
     with open(temp_photo, 'rb') as photo:
         await bot.send_photo(chat_id=CHAT_ID, photo=photo)
     
-    # 5. 사용한 임시 파일 삭제
     if os.path.exists(temp_photo):
         os.remove(temp_photo)
 
@@ -50,25 +42,32 @@ def run_check():
 
     try:
         driver.get("https://pf.kakao.com/_sixfwG/posts") 
-        time.sleep(5)
+        time.sleep(7) # 카카오는 로딩이 길 수 있어 7초로 늘림
 
         xpath = '//*[@id="mArticle"]/div[2]/div[1]/div[2]/div/img'
         img_element = driver.find_element(By.XPATH, xpath)
         current_img_url = img_element.get_attribute('src')
 
-        last_img_url = ""
+        # 1. 사진 데이터를 직접 다운로드
+        response = requests.get(current_img_url)
+        img_data = response.content
+        
+        # 2. 사진의 '지문(Hash)' 생성
+        current_hash = hashlib.md5(img_data).hexdigest()
+
+        # 3. 이전 지문과 비교
+        last_hash = ""
         if os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, 'r') as f:
-                last_img_url = f.read().strip()
+                last_hash = f.read().strip()
 
-        if current_img_url != last_img_url:
-            print("새로운 사진 감지! 회전 후 전송 중...")
-            asyncio.run(send_telegram(current_img_url))
-            
+        if current_hash != last_hash:
+            print("사진 내용 변경 감지! 전송 중...")
+            asyncio.run(send_telegram(img_data))
             with open(HISTORY_FILE, 'w') as f:
-                f.write(current_img_url)
+                f.write(current_hash)
         else:
-            print("사진이 변경되지 않았습니다.")
+            print("사진 내용이 이전과 동일합니다.")
 
     except Exception as e:
         print(f"오류: {e}")
@@ -77,6 +76,3 @@ def run_check():
 
 if __name__ == "__main__":
     run_check()
-
-
-
