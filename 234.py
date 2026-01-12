@@ -11,20 +11,21 @@ import requests
 import hashlib
 from PIL import Image
 from io import BytesIO
+from datetime import datetime, timedelta
 
 # --- [보안 처리: GitHub Secrets에서 값을 가져옵니다] ---
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 # ---------------------------------------------------
-
 HISTORY_FILE = 'last_image_hash.txt'
+TIME_FILE = 'last_run_time.txt'  # <-- 실행 시간이 저장될 파일 이름
 
 async def send_telegram(photo_bytes):
     bot = Bot(token=TELEGRAM_TOKEN)
     img = Image.open(BytesIO(photo_bytes))
     
-    # [회전 수정] 270도에서 90도로 변경 (거꾸로 나오면 90이 정답입니다)
-    rotated_img = img.rotate(90, expand=True) 
+    # [회전 수정] 거꾸로 나온다고 하셨으니 270으로 변경했습니다.
+    rotated_img = img.rotate(270, expand=True) 
     
     temp_photo = "rotated_menu.jpg"
     rotated_img.save(temp_photo, quality=95)
@@ -37,8 +38,17 @@ async def send_telegram(photo_bytes):
         os.remove(temp_photo)
 
 def run_check():
+    # 한국 시간 계산 (UTC+9)
+    now_utc = datetime.utcnow()
+    now_kst = now_utc + timedelta(hours=9)
+    current_time_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
+
+    # 1. 실행 시간 기록 (실행될 때마다 이 파일이 업데이트됩니다)
+    with open(TIME_FILE, 'w', encoding='utf-8') as f:
+        f.write(f"최종 실행 시간(한국): {current_time_str}")
+
     chrome_options = Options()
-    chrome_options.add_argument('--headless') # GitHub에서는 무조건 headless 모드여야 합니다.
+    chrome_options.add_argument('--headless')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
@@ -47,11 +57,10 @@ def run_check():
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
-        print("1. 카카오 채널 접속 중...")
+        print(f"[{current_time_str}] 카카오 채널 접속 중...")
         driver.get("https://pf.kakao.com/_sixfwG/posts")
         time.sleep(7)
 
-        # 게시글 상세 주소 찾기
         links = driver.find_elements(By.TAG_NAME, "a")
         detail_url = None
         for link in links:
@@ -64,17 +73,14 @@ def run_check():
             print("게시글 주소를 찾지 못했습니다.")
             return
 
-        # 2. 상세 페이지 이동
         driver.get(detail_url)
         time.sleep(5)
 
-        # 3. 사진 주소 추출 및 변경 확인
         img_url = driver.find_element(By.XPATH, '//meta[@property="og:image"]').get_attribute('content')
         response = requests.get(img_url)
         img_data = response.content
         current_hash = hashlib.md5(img_data).hexdigest()
 
-        # 이전 기록 비교
         last_hash = ""
         if os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, 'r') as f:
@@ -95,3 +101,21 @@ def run_check():
 
 if __name__ == "__main__":
     run_check()
+GitHub Actions (main.yml) 파일도 수정해야 합니다
+파이썬이 새로 만든 last_run_time.txt 파일을 GitHub에 저장할 수 있도록 .yml 파일 하단을 아래처럼 고쳐주세요.
+
+YAML
+
+# main.yml 파일의 마지막 부분을 이렇게 수정하세요
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          # 두 파일을 모두 저장하도록 수정
+          git add last_image_hash.txt last_run_time.txt || exit 0
+          git commit -m "Update run time and hash" || exit 0
+          git push
+
+if __name__ == "__main__":
+    run_check()
+
