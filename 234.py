@@ -5,117 +5,58 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-import os
-import time
-import requests
-import hashlib
+import os, time, requests, hashlib
 from PIL import Image
 from io import BytesIO
 from datetime import datetime, timedelta
 
-# --- [보안 처리: GitHub Secrets에서 값을 가져옵니다] ---
-TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
-CHAT_ID = os.environ.get('CHAT_ID')
-# ---------------------------------------------------
+TELEGRAM_TOKEN = os.environ.get('8561709574:AAG4WWfgEEaswCbNDWLGwrM7YXb_1lxmZMs')
+CHAT_ID = os.environ.get('862872708')
 HISTORY_FILE = 'last_image_hash.txt'
-TIME_FILE = 'last_run_time.txt'  # <-- 실행 시간이 저장될 파일 이름
+TIME_FILE = 'last_run_time.txt'
 
 async def send_telegram(photo_bytes):
     bot = Bot(token=TELEGRAM_TOKEN)
     img = Image.open(BytesIO(photo_bytes))
-    
-    # [회전 수정] 거꾸로 나온다고 하셨으니 270으로 변경했습니다.
+    # 270도 회전하여 똑바로 세우기
     rotated_img = img.rotate(270, expand=True) 
-    
-    temp_photo = "rotated_menu.jpg"
+    temp_photo = "menu.jpg"
     rotated_img.save(temp_photo, quality=95)
-    
-    print("텔레그램 전송 중...")
-    await bot.send_message(chat_id=CHAT_ID, text="🍱 이번 주 식단표가 도착했습니다!")
-    with open(temp_photo, 'rb') as photo:
-        await bot.send_photo(chat_id=CHAT_ID, photo=photo)
-    if os.path.exists(temp_photo):
-        os.remove(temp_photo)
+    await bot.send_photo(chat_id=CHAT_ID, photo=open(temp_photo, 'rb'), caption="🍱 식단표 업데이트!")
+    os.remove(temp_photo)
 
 def run_check():
-    # 한국 시간 계산 (UTC+9)
-    now_utc = datetime.utcnow()
-    now_kst = now_utc + timedelta(hours=9)
-    current_time_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
-
-    # 1. 실행 시간 기록 (실행될 때마다 이 파일이 업데이트됩니다)
+    # 한국 시간 기록 생성
+    kst_now = (datetime.utcnow() + timedelta(hours=9)).strftime('%Y-%m-%d %H:%M:%S')
     with open(TIME_FILE, 'w', encoding='utf-8') as f:
-        f.write(f"최종 실행 시간(한국): {current_time_str}")
+        f.write(f"최종 실행 시간(KST): {kst_now}")
 
-    chrome_options = Options()
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
     try:
-        print(f"[{current_time_str}] 카카오 채널 접속 중...")
         driver.get("https://pf.kakao.com/_sixfwG/posts")
         time.sleep(7)
-
         links = driver.find_elements(By.TAG_NAME, "a")
-        detail_url = None
-        for link in links:
-            href = link.get_attribute('href')
-            if href and "/_sixfwG/" in href and any(char.isdigit() for char in href):
-                detail_url = href
-                break
+        detail_url = next((l.get_attribute('href') for l in links if "/_sixfwG/" in str(l.get_attribute('href')) and any(c.isdigit() for c in str(l.get_attribute('href')))), None)
         
-        if not detail_url:
-            print("게시글 주소를 찾지 못했습니다.")
-            return
+        if detail_url:
+            driver.get(detail_url)
+            time.sleep(5)
+            img_url = driver.find_element(By.XPATH, '//meta[@property="og:image"]').get_attribute('content')
+            img_data = requests.get(img_url).content
+            curr_hash = hashlib.md5(img_data).hexdigest()
 
-        driver.get(detail_url)
-        time.sleep(5)
+            # 이전 기록 확인
+            last_hash = open(HISTORY_FILE, 'r').read().strip() if os.path.exists(HISTORY_FILE) else ""
 
-        img_url = driver.find_element(By.XPATH, '//meta[@property="og:image"]').get_attribute('content')
-        response = requests.get(img_url)
-        img_data = response.content
-        current_hash = hashlib.md5(img_data).hexdigest()
-
-        last_hash = ""
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, 'r') as f:
-                last_hash = f.read().strip()
-
-        if current_hash != last_hash:
-            print("새로운 메뉴판 감지! 전송합니다.")
-            asyncio.run(send_telegram(img_data))
-            with open(HISTORY_FILE, 'w') as f:
-                f.write(current_hash)
-        else:
-            print("이미 전송된 메뉴판입니다.")
-
-    except Exception as e:
-        print(f"오류 발생: {e}")
+            if curr_hash != last_hash:
+                asyncio.run(send_telegram(img_data))
+                with open(HISTORY_FILE, 'w') as f: f.write(curr_hash)
     finally:
         driver.quit()
 
 if __name__ == "__main__":
     run_check()
-GitHub Actions (main.yml) 파일도 수정해야 합니다
-파이썬이 새로 만든 last_run_time.txt 파일을 GitHub에 저장할 수 있도록 .yml 파일 하단을 아래처럼 고쳐주세요.
-
-YAML
-
-# main.yml 파일의 마지막 부분을 이렇게 수정하세요
-      - name: Commit and Push changes
-        run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          # 두 파일을 모두 저장하도록 수정
-          git add last_image_hash.txt last_run_time.txt || exit 0
-          git commit -m "Update run time and hash" || exit 0
-          git push
-
-if __name__ == "__main__":
-    run_check()
-
