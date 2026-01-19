@@ -10,7 +10,7 @@ from PIL import Image
 from io import BytesIO
 from datetime import datetime, timedelta
 
-# --- [GitHub 환경 변수] ---
+# GitHub Secrets에서 정보 가져오기
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 HISTORY_FILE = 'last_image_hash.txt'
@@ -20,10 +20,10 @@ async def send_telegram(photo_bytes):
     bot = Bot(token=TELEGRAM_TOKEN)
     img = Image.open(BytesIO(photo_bytes))
     
-    # [회전 수정] 사진이 뒤집혀 나오므로 180도 회전하여 똑바로 세웁니다.
+    # [회전 수정] 180도 회전하여 뒤집힌 글자를 똑바로 세웁니다.
     rotated_img = img.rotate(180, expand=True) 
     
-    temp_photo = "menu_fixed.jpg"
+    temp_photo = "menu_final.jpg"
     rotated_img.save(temp_photo, quality=95)
     
     print("텔레그램 전송 중...")
@@ -34,7 +34,7 @@ async def send_telegram(photo_bytes):
         os.remove(temp_photo)
 
 def run_check():
-    # 한국 시간 기록
+    # 실행 시간 기록 (한국 시간)
     kst_now = (datetime.utcnow() + timedelta(hours=9)).strftime('%Y-%m-%d %H:%M:%S')
     with open(TIME_FILE, 'w', encoding='utf-8') as f:
         f.write(f"최종 실행 시간(KST): {kst_now}")
@@ -51,7 +51,6 @@ def run_check():
         driver.get("https://pf.kakao.com/_sixfwG/posts")
         time.sleep(7)
 
-        # 게시글 링크 찾기
         links = driver.find_elements(By.TAG_NAME, "a")
         detail_url = next((l.get_attribute('href') for l in links if "/_sixfwG/" in str(l.get_attribute('href')) and any(c.isdigit() for c in str(l.get_attribute('href')))), None)
         
@@ -64,7 +63,7 @@ def run_check():
         img_data = requests.get(img_url).content
         curr_hash = hashlib.md5(img_data).hexdigest()
 
-        # 중복 전송 방지 체크
+        # 중복 전송 방지
         last_hash = ""
         if os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, 'r') as f:
