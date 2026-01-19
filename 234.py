@@ -21,7 +21,7 @@ async def send_telegram(photo_bytes):
     img = Image.open(BytesIO(photo_bytes))
     
     # [회전 수정] 180도 회전하여 뒤집힌 글자를 똑바로 세웁니다.
-    rotated_img = img.rotate(180, expand=True) 
+    rotated_img = img.rotate(90, expand=True) 
     
     temp_photo = "menu_final.jpg"
     rotated_img.save(temp_photo, quality=95)
@@ -78,3 +78,4 @@ def run_check():
 
 if __name__ == "__main__":
     run_check()
+
