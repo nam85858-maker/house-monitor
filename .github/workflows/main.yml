@@ -1,33 +1,43 @@
 name: Weekly Photo Alert
 on:
   schedule:
-    - cron: '0 0 * * 1'
-    - cron: '0 2 * * 0'
-    - cron: '0 11 * * 0'
-  workflow_dispatch:
+    - cron: '0 0 * * 1'   # 월요일 오전 9시 (KST)
+    - cron: '0 2 * * 0'   # 일요일 오전 11시 (KST)
+    - cron: '0 11 * * 0'  # 일요일 오후 8시 (KST)
+  workflow_dispatch:      # 수동 실행 버튼 활성화
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 이 권한이 있어야 파일을 저장할 수 있습니다.
+      contents: write     # 파일 저장 권한 필수
     steps:
       - uses: actions/checkout@v4
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          
       - name: Install dependencies
-        run: pip install selenium webdriver-manager python-telegram-bot Pillow requests
-      - name: Run Script
+        run: |
+          pip install selenium webdriver-manager python-telegram-bot Pillow requests
+          
+      - name: Run All Scripts
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python 234.py
-      - name: Commit and Push
+        run: |
+          echo "1. 식단표 체크 시작..."
+          python 234.py
+          echo "2. 환급 일정 체크 시작..."
+          python market_schedule.py
+          
+      - name: Commit and Push Changes
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add last_image_hash.txt last_run_time.txt || exit 0
-          git commit -m "Update logs" || exit 0
+          # 모든 기록 파일(.txt)을 추가합니다.
+          git add last_image_hash.txt last_run_time.txt last_market_schedule.txt || exit 0
+          git commit -m "Update logs: Image hash, Run time, and Market schedule" || exit 0
           git push
