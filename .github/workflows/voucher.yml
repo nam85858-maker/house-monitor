@@ -1,0 +1,38 @@
+name: Voucher RSS Alert
+
+on:
+  schedule:
+    # 매주 월요일 오전 9시 (KST) 실행
+    - cron: '0 0 * * 1'   
+  workflow_dispatch:       # 수동 실행 버튼
+
+jobs:
+  run-rss-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # 기록 저장을 위해 필수
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          
+      - name: Install dependencies
+        run: |
+          pip install feedparser python-telegram-bot
+          
+      - name: Run RSS Script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python rss_voucher.py
+          
+      - name: Commit and Push History
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add last_rss_link.txt || true
+          git commit -m "Update RSS history" || exit 0
+          git push
