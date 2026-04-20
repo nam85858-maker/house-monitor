@@ -13,8 +13,8 @@ from selenium.webdriver.chrome.options import Options
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 
-# 식당 채널의 메인 홈 주소 (특정 게시글이 아닌 전체 목록)
-CHANNEL_URL = "https://pf.kakao.com/_TkQxhG"
+# 식당 채널의 '소식(Posts)' 탭 주소로 다이렉트 접속
+CHANNEL_URL = "https://pf.kakao.com/_TkQxhG/posts"
 HISTORY_FILE = "last_menu_hash.txt"
 
 async def send_telegram_photo(image_url, description, post_url):
@@ -39,37 +39,49 @@ def run_check():
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+    # 카카오가 봇을 차단하지 않도록 PC 브라우저인 척 위장
+    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    # [핵심] 화면이 짤려서 글을 못 찾는 현상을 막기 위해 꽉 찬 FHD 해상도로 강제 고정
+    options.add_argument('--window-size=1920,1080')
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
     try:
-        # 1. 채널 메인 접속
+        # 1. 채널 '소식' 탭으로 직행
         driver.get(CHANNEL_URL)
-        time.sleep(5)
+        
+        # [핵심] 깃허브 서버가 느리기 때문에 카카오 화면이 다 뜰 때까지 10초간 넉넉히 대기
+        print("⏳ 카카오 페이지 로딩을 기다리는 중 (10초)...")
+        time.sleep(10)
+        
+        # 숨겨진 글이 나타나도록 화면을 살짝 아래로 스크롤
+        driver.execute_script("window.scrollTo(0, 500);")
+        time.sleep(2)
 
-        # 2. 화면에 있는 모든 링크 중 '게시글(포스트)' 링크만 찾기
+        # 2. 화면에 있는 링크 중 '게시글' 찾기
         links = driver.find_elements(By.TAG_NAME, "a")
         latest_post_url = None
 
         for link in links:
             href = link.get_attribute("href")
-            # 카카오 포스트 주소 형식에 맞고, 맨 뒤가 숫자(게시글 번호)인 것 찾기
             if href and "/_TkQxhG/" in href:
-                post_id = href.split("/")[-1]
+                # 주소 맨 끝이 숫자로 끝나는지 확인 (예: /posts/1234567)
+                parts = href.rstrip('/').split("/")
+                post_id = parts[-1]
                 if post_id.isdigit(): 
                     latest_post_url = href
-                    break # 첫 번째로 찾은 게 가장 최신 글!
+                    break # 가장 먼저 발견된(최신) 글을 저장하고 멈춤
 
         if not latest_post_url:
-            print("❌ 최신 게시글 링크를 찾을 수 없습니다.")
+            print("❌ 최신 게시글 링크를 찾을 수 없습니다. (카카오 로딩 지연 또는 주소 형식 다름)")
             return
 
-        print(f"🔗 최신 게시글 자동 발견: {latest_post_url}")
+        print(f"🔗 최신 게시글 발견: {latest_post_url}")
 
-        # 3. 발견한 최신 게시글로 직접 이동
+        # 3. 최신 게시글로 직접 이동
         driver.get(latest_post_url)
-        time.sleep(3)
+        print("⏳ 게시글 내용 읽는 중 (5초)...")
+        time.sleep(5)
 
         # 이미지와 내용 추출
         try:
@@ -85,7 +97,6 @@ def run_check():
             description = "내용 없음"
 
         # 4. 해시(지문) 생성 및 비교
-        # 주소나 이미지가 하나라도 바뀌면 지문이 변경됨
         current_data = latest_post_url + image_url
         current_hash = hashlib.md5(current_data.encode('utf-8')).hexdigest()
 
@@ -102,7 +113,6 @@ def run_check():
             if TELEGRAM_TOKEN and CHAT_ID:
                 asyncio.run(send_telegram_photo(image_url, description, latest_post_url))
 
-            # 새 지문 저장
             with open(HISTORY_FILE, "w", encoding="utf-8") as f:
                 f.write(current_hash)
             print("💾 최신 식단 기록 완료.")
