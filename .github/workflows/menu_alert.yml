@@ -2,10 +2,7 @@ name: Menu Update Alert
 
 on:
   schedule:
-    # 식단표 특성에 맞게 평일(월~금) 출근길인 아침 8시에 한 번, 점심 전 11시에 한 번 체크하도록 설정했습니다.
-    # 0 23 * * 0-4 -> 한국 시간: 월~금 아침 8시
     - cron: '0 23 * * 0-4'
-    # 0 2 * * 1-5 -> 한국 시간: 월~금 오전 11시
     - cron: '0 2 * * 1-5'
   workflow_dispatch:
 
@@ -24,7 +21,7 @@ jobs:
           
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4 python-telegram-bot
+          pip install selenium webdriver-manager python-telegram-bot
           
       - name: Run Menu Script
         env:
