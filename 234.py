@@ -20,7 +20,7 @@ async def send_telegram(photo_bytes):
     bot = Bot(token=TELEGRAM_TOKEN)
     img = Image.open(BytesIO(photo_bytes))
     
-    # [회전] 90도 회전하여 뒤집힌 글자를 똑바로 세웁니다.
+    # [회전 수정] 180도 회전하여 뒤집힌 글자를 똑바로 세웁니다.
     rotated_img = img.rotate(90, expand=True) 
     
     temp_photo = "menu_final.jpg"
@@ -59,26 +59,6 @@ def run_check():
         driver.get(detail_url)
         time.sleep(5)
 
-        # --- [✨ 핵심 추가: 로고/안내문 필터링] ---
-        # 게시글의 제목과 내용을 먼저 살짝 읽어옵니다.
-        try:
-            title = driver.find_element(By.XPATH, '//meta[@property="og:title"]').get_attribute('content')
-        except:
-            title = ""
-            
-        try:
-            desc = driver.find_element(By.XPATH, '//meta[@property="og:description"]').get_attribute('content')
-        except:
-            desc = ""
-            
-        full_text = title + " " + desc
-        
-        # 글 내용에 '식단'이나 '메뉴'가 없으면 쓸데없는 사진으로 간주하고 그냥 꺼버립니다.
-        if "식단" not in full_text and "메뉴" not in full_text:
-            print("🚫 식단표가 아닌 일반 홍보 사진(로고 등)이므로 무시합니다.")
-            return
-        # ------------------------------------------
-
         img_url = driver.find_element(By.XPATH, '//meta[@property="og:image"]').get_attribute('content')
         img_data = requests.get(img_url).content
         curr_hash = hashlib.md5(img_data).hexdigest()
@@ -98,3 +78,4 @@ def run_check():
 
 if __name__ == "__main__":
     run_check()
+
