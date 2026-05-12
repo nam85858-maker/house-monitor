@@ -1,0 +1,39 @@
+name: Daon Food Profile Alert
+
+on:
+  schedule:
+    # 한국 시간 기준: 월~금 / 오전 9시, 9시 반, 10시, 10시 반, 11시, 11시 반에 실행
+    # (UTC 기준: 0시, 1시, 2시의 0분과 30분)
+    - cron: '0,30 0,1,2 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  run-daon-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          
+      - name: Install dependencies
+        run: |
+          pip install selenium webdriver-manager python-telegram-bot requests
+          
+      - name: Run Daon Script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python daon_checker.py
+          
+      - name: Commit and Push History
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add last_daon_hash.txt || true
+          git commit -m "Update Daon profile history" || exit 0
+          git push
